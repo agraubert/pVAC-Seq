@@ -12,7 +12,6 @@ import csv
 class BindingFilterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        #locate the bin and test_data directories
         cls.pVac_directory = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
         cls.binding_filter_path = os.path.join(cls.pVac_directory, "pvacseq", "lib", "binding_filter.py")
         cls.test_data_path= os.path.join(cls.pVac_directory, "tests", "test_data", "binding_filter")
@@ -39,10 +38,10 @@ class BindingFilterTests(unittest.TestCase):
 
     def test_binding_filter_under_random_constraints(self):
         random.seed()
-        for i in range(5):
+        for trial in range(5):
             binding_threshold = random.randint(1,499)
             fold_change = random.randint(0,100)
-            reader = open(os.path.join(self.test_data_path, 'Test_filtered.xls'), mode='r')
+            reader = open(os.path.join(self.test_data_path, 'Test_filtered.tsv'), mode='r')
             csv_reader = csv.DictReader(reader, delimiter='\t')
             temp_filtered = tempfile.NamedTemporaryFile()
             writer = open(temp_filtered.name, mode='w')
@@ -54,18 +53,20 @@ class BindingFilterTests(unittest.TestCase):
             )
             csv_writer.writeheader()
             for line in csv_reader:
-                if (int(line['MTScore']) < binding_threshold and
-                        float(line['FoldChange']) > fold_change):
+                if (int(line['MT score']) < binding_threshold and
+                        (sys.maxsize if line['Fold Change'] == 'NA' else float(line['Fold Change'])) > fold_change):
                     csv_writer.writerow(line)
             reader.close()
             writer.close()
 
             temp_out = tempfile.NamedTemporaryFile()
-            binding_filter_cmd = "%s  %s  %s  %s  %s -b %d -c %d" % (
+            binding_filter_cmd = "%s  %s  %s  %s -b %d -c %d" % (
                 sys.executable,
                 self.binding_filter_path,
-                os.path.join(self.test_data_path, "annotated_variants.tsv"),
-                self.fof.name,
+                os.path.join(
+                    self.test_data_path,
+                    'Test.HLA-A29:02.9.netmhc.parsed.tsv'
+                ),
                 temp_out.name,
                 binding_threshold,
                 fold_change

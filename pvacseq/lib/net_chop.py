@@ -39,6 +39,12 @@ def main(args_input = sys.argv[1:]):
         help="NetChop prediction threshold.  Default: 0.5",
         default=0.5
     )
+    parser.add_argument(
+        '--parallelize',
+        type=int,
+        help="Maximum number of connections to open in parallel to NetChop.  This has no effect on the order of the output; variants are always output in the same order as they appear in the input file.  Default: 1 (No parallelization)",
+        default = 1
+    )
     args = parser.parse_args(args_input)
     chosen_method = str(methods.index(args.method))
     reader = csv.DictReader(args.input_file, delimiter='\t')
@@ -65,7 +71,7 @@ def main(args_input = sys.argv[1:]):
             current_buffer[sequence_id] = {k:line[k] for k in line}
             x+=1
         staging_file.seek(0)
-        if len(threads)<=25:
+        if len(threads)<=args.parallelize:
             threads.append(threading.Thread(target=_netchop_thread, args=(
                 staging_file,
                 {k:current_buffer[k] for k in current_buffer},

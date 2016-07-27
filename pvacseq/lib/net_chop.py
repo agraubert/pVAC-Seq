@@ -98,7 +98,7 @@ def main(args_input = sys.argv[1:]):
                     ))
                     last_thread = (k, threads[k])
                     break
-                k+=1
+                k = (k+1)%args.parallelize
                 i+=1
         last_thread[1].start()
         sleep(1)

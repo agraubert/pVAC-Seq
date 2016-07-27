@@ -101,9 +101,9 @@ def main(args_input = sys.argv[1:]):
                 k = (k+1)%args.parallelize
                 i+=1
         last_thread[1].start()
-        sleep(1)
         sys.stdout.write('\b'+cycle[i%4])
         sys.stdout.flush()
+        sleep(1)
         i+=1
     while last_thread[1].is_alive():
         sys.stdout.write('\b'+cycle[i%4])

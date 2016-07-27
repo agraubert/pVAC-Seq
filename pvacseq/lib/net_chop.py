@@ -7,9 +7,13 @@ import re
 import os
 from time import sleep
 from lib.main import split_file
+import threading
 
 cycle = ['|', '/', '-', '\\']
 methods = ['cterm', '20s']
+jobid_searcher = re.compile(r'<!-- jobid: [0-9a-fA-F]*? status: (queued|active)')
+result_delimiter = re.compile(r'-{20,}')
+fail_searcher = re.compile(r'(Failed run|Problematic input:)')
 
 def main(args_input = sys.argv[1:]):
     parser = argparse.ArgumentParser("pvacseq net_chop")
@@ -37,9 +41,6 @@ def main(args_input = sys.argv[1:]):
     )
     args = parser.parse_args(args_input)
     chosen_method = str(methods.index(args.method))
-    jobid_searcher = re.compile(r'<!-- jobid: [0-9a-fA-F]*? status: (queued|active)')
-    result_delimiter = re.compile(r'-{20,}')
-    fail_searcher = re.compile(r'(Failed run|Problematic input:)')
     reader = csv.DictReader(args.input_file, delimiter='\t')
     writer = csv.DictWriter(
         args.output_file,
@@ -51,6 +52,8 @@ def main(args_input = sys.argv[1:]):
     x = 0
     i=1
     print("Waiting for results from NetChop... |", end='')
+    threads = []
+    last_thread = (-1, None)
     sys.stdout.flush()
     for chunk in split_file(reader, 100):
         staging_file = tempfile.NamedTemporaryFile(mode='w+')
@@ -62,54 +65,96 @@ def main(args_input = sys.argv[1:]):
             current_buffer[sequence_id] = {k:line[k] for k in line}
             x+=1
         staging_file.seek(0)
-        response = requests.post(
-            "http://www.cbs.dtu.dk/cgi-bin/webface2.fcgi",
-            files={'SEQSUB':(staging_file.name, staging_file, 'text/plain')},
-            data = {
-                'configfile':'/usr/opt/www/pub/CBS/services/NetChop-3.1/NetChop.cf',
-                'SEQPASTE':'',
-                'method':chosen_method,
-                'thresh':'%0f'%args.threshold
-            }
-        )
-        while jobid_searcher.search(response.content.decode()):
-            for _ in range(10):
+        if len(threads)<=25:
+            threads.append(threading.Thread(target=_netchop_thread, args=(
+                staging_file,
+                {k:current_buffer[k] for k in current_buffer},
+                writer,
+                chosen_method,
+                '%0f'%args.threshold,
+                last_thread[1]
+            )))
+            last_thread = (len(threads), threads[-1])
+        else:
+            k = 0
+            while True:
                 sys.stdout.write('\b'+cycle[i%4])
                 sys.stdout.flush()
-                sleep(1)
+                threads[k].join(1)
+                if last_thread[0] != k and not threads[k].is_alive():
+                    threads[k] = threading.Thread(target=_netchop_thread, args=(
+                        staging_file,
+                        {k:current_buffer[k] for k in current_buffer},
+                        writer,
+                        chosen_method,
+                        '%0f'%args.threshold,
+                        last_thread[1]
+                    ))
+                    last_thread = (k, threads[k])
+                    break
+                k+=1
                 i+=1
-            response = requests.get(response.url)
-        mode=0
-        if fail_searcher.search(response.content.decode()):
-            sys.stdout.write('\b\b')
-            print('Failed!')
-            print("NetChop encountered an error during processing")
-            sys.exit(1)
-
-        results = [item.strip() for item in result_delimiter.split(response.content.decode())]
-        for i in range(2, len(results), 4): #examine only the parts we want, skipping all else
-            score = -1
-            pos = 0
-            sequence_name = False
-            for line in results[i].split('\n'):
-                data = [word for word in line.strip().split(' ') if len(word)]
-                currentPosition = data[0]
-                currentScore = float(data[3])
-                if not sequence_name:
-                    sequence_name = data[4]
-                if currentScore > score:
-                    score = currentScore
-                    pos = currentPosition
-            line = current_buffer[sequence_name]
-            line.update({
-                'Best Cleavage Position':pos,
-                'Best Cleavage Score':score
-            })
-            writer.writerow(line)
+        last_thread[1].start()
+        sleep(1)
+        sys.stdout.write('\b'+cycle[i%4])
+        sys.stdout.flush()
+        i+=1
+    while last_thread[1].is_alive():
+        sys.stdout.write('\b'+cycle[i%4])
+        sys.stdout.flush()
+        last_thread[1].join(1)
+        i+=1
     sys.stdout.write('\b\b')
     print("OK")
     args.output_file.close()
     args.input_file.close()
+
+def _netchop_thread(staging_file, chunkbuffer, writer, method, threshold, previous_thread):
+    jobid_searcher = re.compile(r'<!-- jobid: [0-9a-fA-F]*? status: (queued|active)')
+    result_delimiter = re.compile(r'-+')
+    fail_searcher = re.compile(r'(Failed run|Problematic input:)')
+    response = requests.post(
+        "http://www.cbs.dtu.dk/cgi-bin/webface2.fcgi",
+        files={'SEQSUB':(staging_file.name, staging_file, 'text/plain')},
+        data = {
+            'configfile':'/usr/opt/www/pub/CBS/services/NetChop-3.1/NetChop.cf',
+            'SEQPASTE':'',
+            'method':method,
+            'thresh':threshold
+        }
+    )
+    q=0
+    while jobid_searcher.search(response.content.decode()):
+        sleep(10)
+        q+=1
+        response = requests.get(response.url)
+    if fail_searcher.search(response.content.decode()):
+        sys.stdout.write('\b\b')
+        print('Failed!')
+        print("NetChop encountered an error during processing")
+        sys.exit(1)
+    if previous_thread:
+        previous_thread.join()
+    results = [item.strip() for item in result_delimiter.split(response.content.decode())]
+    for i in range(2, len(results), 4): #examine only the parts we want, skipping all else
+        score = -1
+        pos = 0
+        sequence_name = False
+        for line in results[i].split('\n'):
+            data = [word for word in line.strip().split(' ') if len(word)]
+            currentPosition = data[0]
+            currentScore = float(data[3])
+            if not sequence_name:
+                sequence_name = data[4]
+            if currentScore > score:
+                score = currentScore
+                pos = currentPosition
+        line = current_buffer[sequence_name]
+        line.update({
+            'Best Cleavage Position':pos,
+            'Best Cleavage Score':score
+        })
+        writer.writerow(line)
 
 
 if __name__ == '__main__':

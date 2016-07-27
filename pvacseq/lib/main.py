@@ -173,7 +173,9 @@ def net_chop(args, input_path):
         '--method',
         args.net_chop_method,
         '--threshold',
-        str(args.net_chop_threshold)
+        str(args.net_chop_threshold),
+        '--parallelize',
+        args.net-chop-parallelize
     ])
     print("Completed")
     return output_path
@@ -240,6 +242,10 @@ def main(args_input = sys.argv[1:]):
                         type=float,
                         help="NetChop prediction threshold.  Default: 0.5",
                         default=0.5)
+    parser.add_argument('--net-chop-parallelize',
+                        type=int,
+                        help="Maximum number of connections to open in parallel to NetChop.  This has no effect on the order of the output; variants are always output in the same order as they appear in the input file.  Default: 1 (No parallelization)",
+                        default = 1)
 
     args = parser.parse_args(args_input)
     pvacseq_utils.check_alleles_valid(args.allele)
@@ -274,7 +280,6 @@ def main(args_input = sys.argv[1:]):
             args,
             final_path
         )
-
     print("\n")
     print("Done: pvacseq has completed. File", final_path,
           "contains list of binding-filtered putative neoantigens")

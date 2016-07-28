@@ -87,7 +87,7 @@ def main(args_input = sys.argv[1:]):
                 sys.stdout.write('\b'+cycle[i%4])
                 sys.stdout.flush()
                 threads[k].join(1)
-                if last_thread[0] != k and not threads[k].is_alive():
+                if not threads[k].is_alive():
                     threads[k] = threading.Thread(target=_netchop_thread, args=(
                         staging_file,
                         {k:current_buffer[k] for k in current_buffer},

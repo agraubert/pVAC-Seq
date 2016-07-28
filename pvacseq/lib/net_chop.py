@@ -129,10 +129,8 @@ def _netchop_thread(staging_file, chunkbuffer, writer, method, threshold, previo
             'thresh':threshold
         }
     )
-    q=0
     while jobid_searcher.search(response.content.decode()):
         sleep(10)
-        q+=1
         response = requests.get(response.url)
     if fail_searcher.search(response.content.decode()):
         sys.stdout.write('\b\b')

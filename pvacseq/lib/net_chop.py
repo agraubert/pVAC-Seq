@@ -116,9 +116,6 @@ def main(args_input = sys.argv[1:]):
     args.input_file.close()
 
 def _netchop_thread(staging_file, chunkbuffer, writer, method, threshold, previous_thread):
-    jobid_searcher = re.compile(r'<!-- jobid: [0-9a-fA-F]*? status: (queued|active)')
-    result_delimiter = re.compile(r'-+')
-    fail_searcher = re.compile(r'(Failed run|Problematic input:)')
     response = requests.post(
         "http://www.cbs.dtu.dk/cgi-bin/webface2.fcgi",
         files={'SEQSUB':(staging_file.name, staging_file, 'text/plain')},

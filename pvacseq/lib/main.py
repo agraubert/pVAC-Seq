@@ -175,7 +175,7 @@ def net_chop(args, input_path):
         '--threshold',
         str(args.net_chop_threshold),
         '--parallelize',
-        args.net-chop-parallelize
+        str(args.net_chop_parallelize)
     ])
     print("Completed")
     return output_path

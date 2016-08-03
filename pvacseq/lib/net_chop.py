@@ -46,6 +46,8 @@ def main(args_input = sys.argv[1:]):
         default = 1
     )
     args = parser.parse_args(args_input)
+    if args.parallelize < 1:
+        sys.exit("--parallelize cannot be less than 1")
     chosen_method = str(methods.index(args.method))
     reader = csv.DictReader(args.input_file, delimiter='\t')
     writer = csv.DictWriter(

@@ -152,7 +152,7 @@ def _netchop_thread(staging_file, chunkbuffer, writer, method, threshold, previo
             if currentScore > score:
                 score = currentScore
                 pos = currentPosition
-        line = current_buffer[sequence_name]
+        line = chunkbuffer[sequence_name]
         line.update({
             'Best Cleavage Position':pos,
             'Best Cleavage Score':score

@@ -29,6 +29,10 @@ entries = [
     }
     for entry in raw_data
 ]
+# entries.append({
+#     key:0 for key in col_maps
+# })
+# entries[-1]['rowid']=0
 entries.sort(key=lambda x:x['rowid'])
 del raw_data
 cols = col_maps
@@ -39,7 +43,7 @@ cols = col_maps
 ### From here to the bottom, the code can be changed to modify the plotted data
 from bokeh.layouts import row, widgetbox
 from bokeh.charts import Scatter
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.models import ColumnDataSource, HoverTool, Slider
 from bokeh.models.ranges import Range1d as Range
 from bokeh.models.widgets import Select
 from pandas import DataFrame
@@ -65,18 +69,34 @@ y_field = Select(
     ], key = lambda x:x[1]),
     value = 'best_mt_score'
 )
+binding_filter = Slider(
+    start=0,
+    end=max(entry['best_mt_score'] for entry in entries),
+    value=50000,
+    step=10,
+    title="Binding Filter",
+)
+df = DataFrame({
+    key:[
+        entry[key] for entry in entries
+    ]
+    for key in cols
+}, columns=[key for key in cols])
 def update(attr, old, new):
+    global df
     x = x_field.value
     y = y_field.value
     xlabel = cols[x]
     ylabel = cols[y]
-    # df = DataFrame({
-    #     key:[entry[key] for entry in entries]
-    #     for key in cols
-    # }, columns=[key for key in cols])
+    df = DataFrame({
+        key:[
+            entry[key] for entry in entries
+        ]
+        for key in cols
+    }, columns=[key for key in cols])
     # source = ColumnDataSource(df)
     p = Scatter(
-        entries,
+        df,
         x=x,
         y=y,
         legend='top_right',
@@ -85,7 +105,7 @@ def update(attr, old, new):
         xlabel = xlabel,
         ylabel = ylabel,
         tooltips = [
-            ('ID', '@rowid'),
+            ('ID', '$index'),
             (xlabel, '@%s'%x),
             (ylabel, '@%s'%y)
         ]
@@ -95,10 +115,21 @@ def update(attr, old, new):
     # figure.children[1].x = x
     # figure.children[1].y = y
 
+def update_filters(attr, old, new):
+    global df
+    global p
+    binding_threshold = binding_filter.value
+    df = df.where(lambda x:x['best_mt_score']<=binding_threshold)
+    p.update()
 
 x_field.on_change('value', update)
 y_field.on_change('value', update)
-box = widgetbox(x_field, y_field)
+binding_filter.on_change('value', update_filters)
+box = widgetbox(
+    x_field,
+    y_field,
+    binding_filter
+)
 p = Scatter( #dummy plot
     entries[:2],
     x='start',
